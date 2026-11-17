@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>TRAC75 房源趋势</title>
+<style>
+/* One column, two cards: availability over time (A) and who was listed when (D). Drawn from history.json by build_page.py. */
+:root {
+  --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11, 11, 11, 0.10);
+  --c1: #2a78d6;
+  --p1: #eb6834; --p2: #1baf7a; --p3: #eda100; --p4: #e87ba4; --p5: #008300; --p6: #6250d6; --p7: #e34948;
+  --on-p1: #ffffff; --on-p2: #ffffff; --on-p3: #0b0b0b; --on-p4: #ffffff; --on-p5: #ffffff; --on-p6: #ffffff; --on-p7: #ffffff;
+  --font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+    --c1: #3987e5;
+    --p1: #d95926; --p2: #199e70; --p3: #c98500; --p4: #d55181; --p5: #008300; --p6: #9085e9; --p7: #e66767;
+    --on-p3: #ffffff;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.55;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+a { color: var(--c1); }
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.top { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
+.lede { margin: 0; max-width: 66ch; color: var(--ink-2); }
+.card { background: var(--surface); border-radius: 12px; box-shadow: 0 0 0 1px var(--ring); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.head { display: flex; gap: 14px; align-items: flex-start; }
+.tag { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 600; }
+.head p { margin: 2px 0 0; color: var(--ink-2); }
+.chart { width: 100%; min-width: 0; position: relative; }
+.chart svg { display: block; max-width: 100%; height: auto; }
+details { font-size: 12.5px; color: var(--ink-2); }
+summary { cursor: pointer; width: fit-content; padding: 2px 0; }
+summary:focus-visible, .hit:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 420px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink); }
+.foot { font-size: 12.5px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+.foot p { margin: 0; max-width: 78ch; }
+.ax { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.lab { fill: var(--ink-2); font-size: 12px; font-family: var(--font); }
+.val { fill: var(--ink); font-size: 12px; font-weight: 600; font-family: var(--font); }
+.cross { stroke: var(--axis); stroke-width: 1; }
+.seg { transition: filter .12s; }
+.seg:hover, .seg:focus-visible { filter: brightness(1.1); }
+#tip { position: fixed; z-index: 50; pointer-events: none; background: var(--surface); color: var(--ink); border-radius: 8px; box-shadow: 0 0 0 1px var(--ring), 0 6px 24px rgba(0, 0, 0, .14); padding: 9px 11px; font-size: 12.5px; line-height: 1.45; max-width: 280px; }
+#tip[hidden] { display: none; }
+#tip .t-head { font-weight: 600; margin-bottom: 4px; }
+#tip .t-row { display: flex; align-items: baseline; gap: 7px; }
+#tip .t-key { flex: none; width: 12px; height: 2px; border-radius: 1px; transform: translateY(-3px); }
+#tip .t-row strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip .t-row span { color: var(--ink-2); }
+@media (max-width: 520px) { h1 { font-size: 22px; } .card { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .seg { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">TRAC 75 · 75 Braintree St, Allston</p>
+    <h1>房源趋势</h1>
+    <p class="lede">每天 9:30、13:00、18:30（美东时间）检查一次 <a href="https://www.trac75.com/floor-plans">trac75.com</a> 的在租情况，有变化就记一笔，下面两张图都是从这些记录画出来的。<span id="updated"></span></p>
+  </header>
+
+  <section class="card" aria-labelledby="ha">
+    <div class="head"><div class="tag" aria-hidden="true">A</div><div><h2 id="ha">在租套数</h2><p>任何时间点一共有几套可租。鼠标移上去（手机上点一下）能看到当天每套的价格。</p></div></div>
+    <div class="chart" id="chart-a"></div>
+    <details><summary>查看数据表</summary><div class="tablewrap" id="table-a"></div></details>
+  </section>
+
+  <section class="card" aria-labelledby="hd">
+    <div class="head"><div class="tag" aria-hidden="true">D</div><div><h2 id="hd">在租时间线</h2><p>每个户型一行，条形的长度就是在租了多久，条里写着当时的价格（有单元号的时候一并写上）。</p></div></div>
+    <div class="chart" id="chart-d"></div>
+    <details><summary>查看数据表</summary><div class="tablewrap" id="table-d"></div></details>
+  </section>
+
+  <footer class="foot">
+    <p>图里的时间都是美东时间。单元号从 2026-11-16 起才开始记录，之前只有户型和价格。</p>
+    <p>9/29 那次 B2H 的变动时间是估算的（当时邮件通知出了故障，记录晚了一天）。</p>
+  </footer>
+</div>
+<div id="tip" role="status" hidden></div>
+
+<script>
+const DATA = {"end": "2026-11-16T22:11", "plans": {"S1B_Studio": {"name": "S1B", "bed": "0", "ir": false, "baths": 1}, "B1D_TwoBedroom": {"name": "B1D", "bed": "2", "ir": false, "baths": 1}, "B2H_TwoBedroom": {"name": "B2H", "bed": "2", "ir": false, "baths": 2}, "S1A_Studio": {"name": "S1A", "bed": "0", "ir": false, "baths": 1}, "A1A_OneBedroom": {"name": "A1A", "bed": "1", "ir": false, "baths": 1}, "A1B_OneBedroom": {"name": "A1B", "bed": "1", "ir": false, "baths": 1}, "S1BX_IncomeRestricted": {"name": "S1BX", "bed": "0", "ir": true, "baths": 1}, "A1CX_IncomeRestricted": {"name": "A1CX", "bed": "1", "ir": true, "baths": 1}, "S1C_Studio": {"name": "S1C", "bed": "0", "ir": false, "baths": 1}, "S1CX_IncomeRestricted": {"name": "S1CX", "bed": "0", "ir": true, "baths": 1}, "A1D_OneBedroom": {"name": "A1D", "bed": "1", "ir": false, "baths": 1}, "A1E_OneBedroom": {"name": "A1E", "bed": "1", "ir": false, "baths": 1}, "S1DX_IncomeRestricted": {"name": "S1DX", "bed": "0", "ir": true, "baths": 1}, "A1F_OneBedroom": {"name": "A1F", "bed": "1", "ir": false, "baths": 1}, "A1GX_IncomeRestricted": {"name": "A1GX", "bed": "1", "ir": true, "baths": 1}, "A1HHX_IncomeRestricted": {"name": "A1HHX", "bed": "1", "ir": true, "baths": 1}, "A1IX_IncomeRestricted": {"name": "A1IX", "bed": "1", "ir": true, "baths": 1}, "B1AB_TwoBedroom": {"name": "B1AB", "bed": "2", "ir": false, "baths": 1}, "B1B_TwoBedroom": {"name": "B1B", "bed": "2", "ir": false, "baths": 1}, "B1BBH_TwoBedroom": {"name": "B1BBH", "bed": "2", "ir": false, "baths": 1}, "B1C_TwoBedroom": {"name": "B1C", "bed": "2", "ir": false, "baths": 1}, "B1DH_TwoBedroom": {"name": "B1DH", "bed": "2", "ir": false, "baths": 1}, "B1EX_IncomeRestricted": {"name": "B1EX", "bed": "2", "ir": true, "baths": 1}, "B1FB_TwoBedroom": {"name": "B1FB", "bed": "2", "ir": false, "baths": 1}, "C1A_ThreeBedroom": {"name": "C1A", "bed": "3", "ir": false, "baths": 1}, "B1GH_TwoBedroom": {"name": "B1GH", "bed": "2", "ir": false, "baths": 1}, "C2B_ThreeBedroom": {"name": "C2B", "bed": "3", "ir": false, "baths": 2}, "C2CX_IncomeRestricted": {"name": "C2CX", "bed": "3", "ir": true, "baths": 2}}, "events": [{"t": "2026-09-11T10:59", "state": {"A1GX_IncomeRestricted": [1, 1809, 1809, null], "B2H_TwoBedroom": [2, 4916, 4974, null]}}, {"t": "2026-09-11T14:37", "state": {"B2H_TwoBedroom": [2, 4916, 4974, null]}}, {"t": "2026-09-14T17:48", "state": {"A1D_OneBedroom": [1, 3040, 3040, null], "B2H_TwoBedroom": [2, 4916, 4974, null]}}, {"t": "2026-09-21T11:13", "state": {"S1B_Studio": [1, 2825, 2825, null], "B2H_TwoBedroom": [2, 4916, 4974, null]}}, {"t": "2026-09-29T18:13", "state": {"S1B_Studio": [1, 2825, 2825, null], "B2H_TwoBedroom": [1, 4916, 4916, null]}, "est": true}, {"t": "2026-10-01T18:30", "state": {"S1B_Studio": [1, 2589, 2589, null], "B2H_TwoBedroom": [1, 4916, 4916, null]}}, {"t": "2026-10-12T18:30", "state": {"S1B_Studio": [1, 2589, 2589, null]}}, {"t": "2026-10-19T18:30", "state": {"S1B_Studio": [1, 2589, 2589, null], "A1D_OneBedroom": [1, 2895, 2895, null], "B2H_TwoBedroom": [1, 4916, 4916, null]}}, {"t": "2026-11-02T13:00", "state": {"S1B_Studio": [1, 2589, 2589, null], "A1D_OneBedroom": [1, 2895, 2895, null], "B1D_TwoBedroom": [1, 4095, 4095, null], "B2H_TwoBedroom": [1, 4916, 4916, null]}}, {"t": "2026-11-03T13:00", "state": {"S1B_Studio": [1, 2589, 2589, null], "A1D_OneBedroom": [1, 2750, 2750, null], "B1D_TwoBedroom": [1, 3754, 3754, null], "B2H_TwoBedroom": [1, 4703, 4703, null]}}, {"t": "2026-11-06T09:30", "state": {"S1B_Studio": [1, 2589, 2589, ["507"]], "B1D_TwoBedroom": [1, 3754, 3754, ["405"]], "B2H_TwoBedroom": [1, 4703, 4703, ["403"]]}}]};
+
+/* ---------- helpers ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if ((k === 'fill' || k === 'stroke') && String(v).startsWith('var(')) e.style[k] = v;
+    else e.setAttribute(k, v);
+  }
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function text(parent, s, attrs) { const t = el('text', attrs, parent); t.textContent = s; return t; }
+const D = s => new Date(s);
+const T0 = D(DATA.events[0].t), T1 = D(DATA.end), DAY = 86400000;
+const money = n => '$' + Number(n).toLocaleString('en-US');
+const WK = ['日', '一', '二', '三', '四', '五', '六'];
+const fmtDay = d => `${d.getMonth() + 1}/${d.getDate()}`;
+const fmtDT = d => `${fmtDay(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+const BED = { '0': '开间', '1': '一居', '2': '两居', '3': '三居' };
+const priceText = (lo, hi) => (hi > lo ? `${money(lo)}–${money(hi)}` : money(lo));
+const nums = v => (v && v.length ? v.join('、') : null);
+
+const EV = DATA.events.map(e => ({ ...e, d: D(e.t), total: Object.values(e.state).reduce((s, v) => s + v[0], 0) }));
+function stateAt(t) { let cur = EV[0]; for (const e of EV) { if (e.d <= t) cur = e; else break; } return cur; }
+
+/* availability periods per floor plan; a new step starts when units or price change */
+function buildPeriods(events) {
+  const out = [], open = {};
+  events.forEach(e => {
+    new Set([...Object.keys(open), ...Object.keys(e.state)]).forEach(fp => {
+      const s = e.state[fp], p = open[fp];
+      if (s && !p) open[fp] = { fp, start: e.t, end: null, steps: [{ t: e.t, units: s[0], min: s[1], max: s[2], nums: s[3] || null }] };
+      else if (s && p) {
+        const last = p.steps[p.steps.length - 1];
+        if (last.units !== s[0] || last.min !== s[1] || last.max !== s[2]) p.steps.push({ t: e.t, units: s[0], min: s[1], max: s[2], nums: s[3] || null });
+        else if (s[3]) last.nums = s[3];
+      } else if (!s && p) { p.end = e.t; out.push(p); delete open[fp]; }
+    });
+  });
+  Object.values(open).forEach(p => out.push(p));
+  return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+const PERIODS = buildPeriods(DATA.events);
+const periodEnd = p => (p.end ? D(p.end) : T1);
+const FPS = [...new Set(PERIODS.map(p => p.fp))]
+  .sort((a, b) => DATA.plans[a].bed.localeCompare(DATA.plans[b].bed) || DATA.plans[a].ir - DATA.plans[b].ir || DATA.plans[a].name.localeCompare(DATA.plans[b].name));
+const colorOf = fp => `var(--p${(FPS.indexOf(fp) % 7) + 1})`;
+const onColorOf = fp => `var(--on-p${(FPS.indexOf(fp) % 7) + 1})`;
+function labelOf(fp) {
+  const p = DATA.plans[fp];
+  return `${p.name} ${BED[p.bed]}${p.baths === 2 ? '·两卫' : ''}${p.ir ? '·限收入' : ''}`;
+}
+const rowLabel = (fp, v) => (nums(v[3]) ? `${DATA.plans[fp].name} · 单元 ${nums(v[3])}` : `${DATA.plans[fp].name}${v[0] > 1 ? ' ×' + v[0] : ''}`);
+
+document.getElementById('updated').textContent =
+  ` 更新于 ${fmtDT(T1)}，最近一次变动在 ${fmtDT(EV[EV.length - 1].d)}。`;
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById('tip');
+function showTip(build, cx, cy) {
+  tip.replaceChildren(); build(tip); tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let left = cx + 14; if (left + r.width > innerWidth - 8) left = cx - 14 - r.width;
+  let top = cy - r.height - 12; if (top < 8) top = cy + 18;
+  tip.style.left = Math.max(8, left) + 'px'; tip.style.top = top + 'px';
+}
+const hideTip = () => { tip.hidden = true; };
+function tHead(parent, s) { const d = document.createElement('div'); d.className = 't-head'; d.textContent = s; parent.appendChild(d); }
+function tRow(parent, color, value, label) {
+  const r = document.createElement('div'); r.className = 't-row';
+  if (color) { const k = document.createElement('i'); k.className = 't-key'; k.style.background = color; r.appendChild(k); }
+  const s = document.createElement('strong'); s.textContent = value; r.appendChild(s);
+  if (label) { const l = document.createElement('span'); l.textContent = label; r.appendChild(l); }
+  parent.appendChild(r);
+}
+
+/* ---------- chart mount (redraws at the real container width) ---------- */
+function mount(id, heightOf, draw, aria) {
+  const box = document.getElementById(id);
+  const svg = el('svg', { role: 'img', 'aria-label': aria }, box);
+  const run = () => {
+    const w = Math.max(280, Math.floor(box.clientWidth)); const h = heightOf(w);
+    svg.replaceChildren(); svg.setAttribute('width', w); svg.setAttribute('height', h); svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    hideTip(); draw(svg, w, h);
+  };
+  new ResizeObserver(run).observe(box); run();
+}
+/* x ticks: the 1st and 15th of each month inside the data range (just the 1sts on a narrow screen) */
+function xTickDates(w) {
+  const out = [];
+  for (let d = new Date(T0.getFullYear(), T0.getMonth(), 1); d <= T1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    [1, 15].forEach(day => { const t = new Date(d.getFullYear(), d.getMonth(), day); if (t >= T0 && t <= T1 && (day === 1 || w >= 520)) out.push(t); });
+  }
+  return out;
+}
+function drawTimeAxis(svg, g, x) {
+  el('line', { x1: g.l, x2: g.l + g.iw, y1: g.t + g.ih, y2: g.t + g.ih, stroke: 'var(--axis)', 'stroke-width': 1 }, svg);
+  for (const d of xTickDates(g.iw + g.l + g.r)) {
+    el('line', { x1: x(d), x2: x(d), y1: g.t, y2: g.t + g.ih, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
+    text(svg, fmtDay(d), { x: x(d), y: g.t + g.ih + 17, 'text-anchor': 'middle', class: 'ax' });
+  }
+}
+function yGrid(svg, g, ticks, y, fmt) {
+  for (const v of ticks) {
+    el('line', { x1: g.l, x2: g.l + g.iw, y1: y(v), y2: y(v), stroke: v === ticks[0] ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }, svg);
+    text(svg, fmt(v), { x: g.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'ax' });
+  }
+}
+/* crosshair that follows the pointer (or arrow keys, one day per press) and reports the time under it */
+function attachCross(svg, g, onTime) {
+  const line = el('line', { y1: g.t, y2: g.t + g.ih, class: 'cross' }, svg); line.style.display = 'none';
+  const hit = el('rect', { x: g.l, y: g.t, width: g.iw, height: g.ih, fill: 'transparent', tabindex: 0, class: 'hit', 'aria-label': '时间轴：左右方向键逐日查看' }, svg);
+  let cur = null;
+  const px = t => g.l + (t - T0) / (T1 - T0) * g.iw;
+  const at = (t, cx, cy) => { cur = t; const x = px(t); line.setAttribute('x1', x); line.setAttribute('x2', x); line.style.display = ''; onTime(t, x, cx, cy); };
+  const off = () => { line.style.display = 'none'; onTime(null); hideTip(); };
+  const fromEvent = ev => {
+    const r = svg.getBoundingClientRect();
+    return new Date(+T0 + Math.min(1, Math.max(0, (ev.clientX - r.left - g.l) / g.iw)) * (T1 - T0));
+  };
+  hit.addEventListener('pointermove', ev => at(fromEvent(ev), ev.clientX, ev.clientY));
+  hit.addEventListener('pointerdown', ev => at(fromEvent(ev), ev.clientX, ev.clientY));
+  hit.addEventListener('pointerleave', off);
+  hit.addEventListener('blur', off);
+  hit.addEventListener('keydown', ev => {
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    ev.preventDefault();
+    const t = new Date(Math.min(+T1, Math.max(+T0, +(cur || T1) + (ev.key === 'ArrowLeft' ? -DAY : DAY))));
+    const r = svg.getBoundingClientRect(); at(t, r.left + px(t), r.top + g.t + 24);
+  });
+}
+function table(id, heads, rows) {
+  const t = document.createElement('table');
+  const thead = t.createTHead().insertRow();
+  heads.forEach(h => { const c = document.createElement('th'); c.textContent = h; thead.appendChild(c); });
+  const body = t.createTBody();
+  rows.forEach(r => { const tr = body.insertRow(); r.forEach(v => { tr.insertCell().textContent = v; }); });
+  document.getElementById(id).appendChild(t);
+}
+
+/* ---------- A: total available units over time ---------- */
+const maxTotal = Math.max(1, ...EV.map(e => e.total));
+mount('chart-a', () => 230, (svg, w, h) => {
+  const g = { l: 34, r: 64, t: 16, b: 28 }; g.iw = w - g.l - g.r; g.ih = h - g.t - g.b;
+  const x = t => g.l + (t - T0) / (T1 - T0) * g.iw;
+  const y = v => g.t + g.ih - v / maxTotal * g.ih;
+  yGrid(svg, g, Array.from({ length: maxTotal + 1 }, (_, i) => i), y, v => v);
+  drawTimeAxis(svg, g, x);
+  let d = `M${x(EV[0].d)},${y(EV[0].total)}`;
+  EV.slice(1).forEach(e => { d += ` H${x(e.d)} V${y(e.total)}`; });
+  d += ` H${x(T1)}`;
+  el('path', { d: `${d} V${y(0)} H${x(EV[0].d)} Z`, fill: 'var(--c1)', 'fill-opacity': 0.1 }, svg);
+  el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+  const last = EV[EV.length - 1];
+  el('circle', { cx: x(T1), cy: y(last.total), r: 4, fill: 'var(--c1)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+  text(svg, `现在 ${last.total} 套`, { x: x(T1) + 10, y: y(last.total) + 4, class: 'val' });
+  const dot = el('circle', { r: 4, fill: 'var(--c1)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg); dot.style.display = 'none';
+  attachCross(svg, g, (t, px, cx, cy) => {
+    if (!t) { dot.style.display = 'none'; return; }
+    const e = stateAt(t); dot.setAttribute('cx', px); dot.setAttribute('cy', y(e.total)); dot.style.display = '';
+    showTip(box => {
+      tHead(box, `${fmtDay(t)} 周${WK[t.getDay()]}`);
+      tRow(box, null, `${e.total} 套`, '在租');
+      Object.entries(e.state).forEach(([fp, v]) => tRow(box, colorOf(fp), priceText(v[1], v[2]), rowLabel(fp, v)));
+    }, cx, cy);
+  });
+}, '每个时间点在租的总套数折线图');
+table('table-a', ['记录时间', '在租总数', '明细'],
+  [...EV].reverse().map(e => [fmtDT(e.d) + (e.est ? '（估）' : ''), e.total,
+    Object.entries(e.state).map(([fp, v]) => `${rowLabel(fp, v)} ${priceText(v[1], v[2])}`).join('，') || '无']));
+
+/* ---------- D: availability timeline ---------- */
+mount('chart-d', () => 8 + 42 * FPS.length + 30, (svg, w, h) => {
+  const narrow = w < 560;
+  const g = { l: narrow ? 50 : 168, r: 10, t: 8, b: 30 }; g.iw = w - g.l - g.r; g.ih = 42 * FPS.length;
+  const x = t => g.l + (t - T0) / (T1 - T0) * g.iw;
+  drawTimeAxis(svg, g, x);
+  FPS.forEach((fp, i) => {
+    const cy = g.t + 42 * i + 21;
+    if (i > 0) el('line', { x1: g.l, x2: g.l + g.iw, y1: g.t + 42 * i, y2: g.t + 42 * i, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
+    el('circle', { cx: narrow ? 6 : 8, cy, r: 4, fill: colorOf(fp) }, svg);
+    text(svg, narrow ? DATA.plans[fp].name : labelOf(fp), { x: narrow ? 16 : 20, y: cy + 4, class: 'lab' });
+  });
+  PERIODS.forEach(p => {
+    const row = FPS.indexOf(p.fp), cy = g.t + 42 * row + 21, pe = periodEnd(p);
+    p.steps.forEach((s, j) => {
+      const a = D(s.t), b = j + 1 < p.steps.length ? D(p.steps[j + 1].t) : pe;
+      const x0 = x(a) + (j > 0 ? 1 : 0), x1 = x(b) - (j + 1 < p.steps.length ? 1 : 0), sw = Math.max(6, x1 - x0);
+      const seg = el('rect', { x: x0, y: cy - 11, width: sw, height: 22, rx: 4, fill: colorOf(p.fp), class: 'seg hit', tabindex: 0, 'aria-label': `${labelOf(p.fp)} ${fmtDT(a)} 起 ${priceText(s.min, s.max)}` }, svg);
+      const price = money(s.min), full = price + (nums(s.nums) ? ` · ${nums(s.nums)}` : s.units > 1 ? ` ×${s.units}` : '');
+      const lab = [full, price].find(t => sw >= t.length * 6.8 + 14);
+      if (lab) text(svg, lab, { x: x0 + 8, y: cy + 4, style: `fill:${onColorOf(p.fp)};font-size:11px;font-weight:600;font-family:var(--font);pointer-events:none` });
+      const open = (cx, cy2) => showTip(box => {
+        tHead(box, labelOf(p.fp));
+        tRow(box, colorOf(p.fp), priceText(s.min, s.max), s.units > 1 ? `${s.units} 套` : '1 套');
+        if (nums(s.nums)) tRow(box, null, nums(s.nums), '单元号');
+        tRow(box, null, `${fmtDT(a)} → ${b >= T1 && !p.end ? '至今' : fmtDT(b)}`, '');
+        tRow(box, null, `${((b - a) / DAY).toFixed(1)} 天`, '该价格持续');
+      }, cx, cy2);
+      seg.addEventListener('pointermove', ev => open(ev.clientX, ev.clientY));
+      seg.addEventListener('pointerdown', ev => open(ev.clientX, ev.clientY));
+      seg.addEventListener('pointerleave', hideTip);
+      seg.addEventListener('focus', () => { const rc = seg.getBoundingClientRect(); open(rc.left + rc.width / 2, rc.top); });
+      seg.addEventListener('blur', hideTip);
+    });
+  });
+}, '各户型在租时间线');
+table('table-d', ['户型', '单元', '开始', '结束', '在租天数', '价格'],
+  [...PERIODS].reverse().map(p => [labelOf(p.fp), nums(p.steps[p.steps.length - 1].nums) || '—', fmtDT(D(p.start)), p.end ? fmtDT(D(p.end)) : '在租中',
+    ((periodEnd(p) - D(p.start)) / DAY).toFixed(1), p.steps.map(s => priceText(s.min, s.max)).join(' → ')]));
+</script>
+</body>
+</html>
